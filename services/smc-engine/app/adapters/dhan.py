@@ -1,7 +1,7 @@
-"""DhanHQ API v2 Broker Adapter (REST Historical OHLCV + Binary WebSocket Live Market Feed).
+"""DhanHQ API v2 adapter for user supplied historical candles and streaming ticks.
 
-Users supply their own DhanHQ Client ID and Access Token (encrypted at rest under DPDP Act 2023).
-OrderZero never redistributes exchange data across accounts.
+Credentials are supplied per request by the user. OrderZero does not persist them
+or redistribute exchange data across accounts.
 """
 
 from __future__ import annotations

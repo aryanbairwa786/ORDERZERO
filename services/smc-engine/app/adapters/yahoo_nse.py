@@ -1,9 +1,7 @@
-"""Real NSE & BSE Market Data Adapter (Yahoo Finance JSON API).
+"""Unofficial Yahoo Finance adapter with clearly marked generated fallback candles.
 
-Provides:
-- Accurate historical & last-closed OHLCV candles for NSE/BSE indices, sectoral indices, and equities
-- Exact previous_close & 1-day % change matching exchange closing figures
-- Live quote streaming during NSE market hours (09:15–15:30 IST, Mon–Fri) that stops when closed
+Yahoo Finance is not an exchange-authorized NSE/BSE feed. Values can be delayed,
+incomplete, rate-limited, unavailable, or differ from official exchange data.
 """
 
 from __future__ import annotations
@@ -93,7 +91,7 @@ def resample_candles(candles: List[Candle], timeframe: str) -> List[Candle]:
 
 
 class YahooNSEAdapter:
-    """Fetches real NSE/BSE OHLCV candles and live quotes with IST session awareness."""
+    """Fetch unofficial Yahoo Finance candles and quotes with IST session awareness."""
 
     def __init__(self, cache_ttl_seconds: int = 15) -> None:
         self._cache: Dict[Tuple[str, str], Tuple[datetime, List[Candle], Dict[str, Any]]] = {}
@@ -141,7 +139,7 @@ class YahooNSEAdapter:
 
     @staticmethod
     def extract_quote_meta(payload: Dict[str, Any], candles: List[Candle]) -> Dict[str, Any]:
-        """Extract exact regularMarketPrice, previousClose, and 1-day % change."""
+        """Extract quote fields from Yahoo Finance response metadata when available."""
         results = (payload.get("chart") or {}).get("result") or []
         meta = results[0].get("meta", {}) if results else {}
 
@@ -187,14 +185,14 @@ class YahooNSEAdapter:
         exchange: str = "NSE",
         timeframe: str = "5m",
     ) -> Tuple[List[Candle], Dict[str, Any], str]:
-        """Return (candles, quote_meta, source_label) using real NSE/BSE Yahoo data."""
+        """Return candles, quote metadata, and an unofficial or demo source label."""
         key = (symbol.upper().strip(), timeframe)
         now = datetime.now(tz=IST)
         # Shorter cache during live market hours (10s), longer when closed (120s)
         ttl = timedelta(seconds=10) if get_nse_session_status(now) == "open" else timedelta(seconds=120)
         cached = self._cache.get(key)
         if cached and (now - cached[0]) < ttl:
-            return cached[1], cached[2], "nse_live_feed"
+            return cached[1], cached[2], "yahoo_finance_unofficial"
 
         ticker = to_yahoo_ticker(symbol, exchange)
         interval, rng, needs_resample = YAHOO_INTERVAL_MAP.get(timeframe, ("5m", "5d", False))
@@ -207,7 +205,7 @@ class YahooNSEAdapter:
             if len(candles) >= 5:
                 meta = self.extract_quote_meta(payload, candles)
                 self._cache[key] = (now, candles, meta)
-                return candles, meta, "nse_live_feed"
+                return candles, meta, "yahoo_finance_unofficial"
         except Exception:
             pass
 
@@ -238,7 +236,7 @@ class YahooNSEAdapter:
         return candles, source
 
     def fetch_latest_quote(self, symbol: str, exchange: str = "NSE") -> Optional[Dict[str, Any]]:
-        """Fetch exact real LTP and 1-day % change (live when open, exact close when closed)."""
+        """Fetch an unofficial Yahoo Finance quote; it may be delayed or unavailable."""
         ticker = to_yahoo_ticker(symbol, exchange)
         try:
             payload = self._http_get_yahoo(ticker, "1d", "5d")
@@ -256,7 +254,7 @@ class YahooNSEAdapter:
         return None
 
     def fetch_sector_heatmap(self) -> List[Dict[str, Any]]:
-        """Fetch real NSE sectoral index daily % changes."""
+        """Fetch unofficial Yahoo Finance sector-index changes when available."""
         heatmap: List[Dict[str, Any]] = []
         for sector_name, ticker in NSE_SECTOR_TICKERS.items():
             quote = self.fetch_latest_quote(ticker, "NSE")
@@ -270,7 +268,7 @@ class YahooNSEAdapter:
         exchange: str = "NSE",
         poll_seconds: float = 3.0,
     ) -> AsyncIterator[Tick]:
-        """Stream real NSE/BSE live prices during market hours; stop immediately when closed."""
+        """Poll unofficial Yahoo Finance prices; this is not an exchange tick stream."""
         ticker = to_yahoo_ticker(symbol, exchange)
         loop = asyncio.get_running_loop()
         while True:
