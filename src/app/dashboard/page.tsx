@@ -1,370 +1,241 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
-import Navbar from '@/components/layout/Navbar';
-import { formatPrice, formatPercent, formatVolume, getMarketStatus, cleanSymbol } from '@/lib/utils';
-import { IndexData, StockData } from '@/lib/types';
-import { NIFTY50_STOCKS } from '@/lib/types';
+import React, { useState, useEffect, useMemo } from "react";
+import { AppNavbar } from "@/components/layout/AppNavbar";
+import { SebiDisclaimerBar } from "@/components/compliance/SebiDisclaimerBar";
+import { BreadthScatterStrip } from "@/components/terminal/BreadthScatterStrip";
+import { BullBearBoards } from "@/components/terminal/BullBearBoards";
+import { OrderBlockPopup } from "@/components/terminal/OrderBlockPopup";
+import { PlaybookFlowchart } from "@/components/terminal/PlaybookFlowchart";
 import {
-  TrendingUp, TrendingDown, Activity, BarChart3,
-  ArrowUpRight, ArrowDownRight, RefreshCw, Clock,
-  Zap, Eye
-} from 'lucide-react';
+  generateTerminalData,
+  TerminalState,
+  StockOrderBlockCard
+} from "@/lib/orderblock-engine";
+import {
+  Zap,
+  AlertCircle,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  ShieldCheck,
+  Info,
+  Layers,
+  ArrowUpRight,
+  ArrowDownRight
+} from "lucide-react";
+import Link from "next/link";
 
-export default function DashboardPage() {
-  const [indices, setIndices] = useState<IndexData[]>([]);
-  const [stocks, setStocks] = useState<Record<string, StockData>>({});
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [marketStatus, setMarketStatus] = useState<string>('Market Closed');
+const ENGINE_URL = process.env.NEXT_PUBLIC_SMC_ENGINE_URL || "https://orderzero-lzpv.onrender.com";
 
-  const fetchData = useCallback(async () => {
-    try {
-      setError(null);
-      const [indicesRes, stocksRes] = await Promise.allSettled([
-        fetch('/api/nse/indices'),
-        fetch(`/api/stocks?symbols=${NIFTY50_STOCKS.slice(0, 20).map(s => s.symbol).join(',')}`),
-      ]);
-
-      if (indicesRes.status === 'fulfilled' && indicesRes.value.ok) {
-        const data = await indicesRes.value.json();
-        setIndices(data.indices || []);
-      }
-
-      if (stocksRes.status === 'fulfilled' && stocksRes.value.ok) {
-        const data = await stocksRes.value.json();
-        setStocks(data.stocks || {});
-      }
-
-      setLastUpdated(new Date());
-      setLoading(false);
-    } catch (err) {
-      console.error('Dashboard fetch error:', err);
-      setError('Failed to load market data. Retrying...');
-      setLoading(false);
-    }
+export default function TerminalDashboardPage() {
+  const [terminalData, setTerminalData] = useState<TerminalState>(() => generateTerminalData());
+  const [selectedStock, setSelectedStock] = useState<StockOrderBlockCard | null>(null);
+  const [showPlaybookGuide, setShowPlaybookGuide] = useState(false);
+  // Fetch real backend data if available, fallback gracefully to authentic client engine
+  useEffect(() => {
+    fetch(`${ENGINE_URL}/api/v1/orderblock/terminal`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.bullishBoard && data?.bearishBoard) {
+          setTerminalData(data);
+        }
+      })
+      .catch(() => {
+        // Client engine fallback works 100% offline & free
+      });
   }, []);
 
-  useEffect(() => {
-    setMarketStatus(getMarketStatus());
-    fetchData();
-    const interval = setInterval(() => {
-      setMarketStatus(getMarketStatus());
-      fetchData();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  // Handler when stock dot or row is clicked
+  const handleSelectSymbol = (symbol: string) => {
+    const found =
+      terminalData.bullishBoard.find((s) => s.symbol === symbol) ||
+      terminalData.bearishBoard.find((s) => s.symbol === symbol);
 
-  const stockList = Object.values(stocks);
-  const gainers = [...stockList].filter(s => s.changePercent > 0).sort((a, b) => b.changePercent - a.changePercent).slice(0, 5);
-  const losers = [...stockList].filter(s => s.changePercent < 0).sort((a, b) => a.changePercent - b.changePercent).slice(0, 5);
-
-  // Sector performance
-  const sectorMap: Record<string, { total: number; change: number; count: number }> = {};
-  stockList.forEach(s => {
-    const stock = NIFTY50_STOCKS.find(n => n.symbol === s.symbol);
-    if (stock) {
-      if (!sectorMap[stock.sector]) sectorMap[stock.sector] = { total: 0, change: 0, count: 0 };
-      sectorMap[stock.sector].total += s.changePercent;
-      sectorMap[stock.sector].count++;
+    if (found) {
+      setSelectedStock(found);
+    } else {
+      // Look in breadth scatter
+      const defaultMatch = terminalData.bullishBoard[0];
+      if (defaultMatch) setSelectedStock(defaultMatch);
     }
-  });
-  const sectors = Object.entries(sectorMap)
-    .map(([name, data]) => ({ name, avgChange: data.total / data.count }))
-    .sort((a, b) => b.avgChange - a.avgChange);
+  };
 
   return (
-    <>
-      <Navbar />
-      <main className="flex-1 max-w-[1920px] mx-auto w-full px-4 py-6 space-y-6">
-        {/* Market Status Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">Market Dashboard</h1>
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-              marketStatus === 'Market Open' 
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
-            }`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${marketStatus === 'Market Open' ? 'bg-emerald-500 live-pulse' : 'bg-zinc-500'}`} />
-              {marketStatus}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {lastUpdated && (
-              <span className="text-xs text-zinc-500 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {lastUpdated.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+    <div className="flex min-h-screen flex-col bg-[#090d16] text-white">
+      <AppNavbar />
+
+      <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 p-4 sm:p-6">
+        {/* Terminal Header & Overview */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+                OrderBlock Terminal
+              </h1>
+              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-xs font-bold text-emerald-400">
+                222-SYMBOL DEMO UNIVERSE
               </span>
-            )}
+            </div>
+            <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+              Synthetic rankings, 2:1 direction-gated contenders, and generated 5-minute order block examples.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
             <button
-              onClick={fetchData}
-              className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
-              title="Refresh"
+              onClick={() => setShowPlaybookGuide(!showPlaybookGuide)}
+              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <Zap className="h-3.5 w-3.5" />
+              <span>{showPlaybookGuide ? "Hide Playbook" : "How to Read Flowchart"}</span>
             </button>
+            <Link
+              href="/playbook"
+              className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700"
+            >
+              Full Playbook
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
-            {error}
+        <div role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+          <strong className="mr-2 font-mono">SYNTHETIC DEMO DATA</strong>
+          Prices, candles, volume, ADM, rankings, and zones on this terminal are generated from static reference inputs. No live or historical exchange feed is connected.
+        </div>
+
+        {/* Playbook Flowchart Drawer (if opened) */}
+        {showPlaybookGuide && (
+          <div className="animate-in fade-in slide-in-from-top-4 duration-200">
+            <PlaybookFlowchart />
           </div>
         )}
 
-        {/* Index Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {loading && indices.length === 0 ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-[#141417] border border-[#27272A] rounded-xl p-4 animate-pulse">
-                <div className="h-4 w-24 bg-zinc-800 rounded mb-3" />
-                <div className="h-8 w-32 bg-zinc-800 rounded mb-2" />
-                <div className="h-4 w-20 bg-zinc-800 rounded" />
-              </div>
-            ))
-          ) : (
-            indices.map((idx) => (
-              <div
-                key={idx.symbol}
-                className={`bg-[#141417] border rounded-xl p-4 transition-all hover:border-zinc-600 ${
-                  idx.change >= 0 ? 'border-emerald-500/20 glow-green' : 'border-red-500/20 glow-red'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-zinc-400 font-medium">{idx.name}</span>
-                  {idx.change >= 0 ? (
-                    <ArrowUpRight className="w-4 h-4 text-emerald-500" />
-                  ) : (
-                    <ArrowDownRight className="w-4 h-4 text-red-500" />
-                  )}
-                </div>
-                <div className="text-2xl font-bold font-mono tracking-tight">
-                  {formatPrice(idx.value)}
-                </div>
-                <div className={`text-sm font-medium font-mono mt-1 ${
-                  idx.change >= 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}>
-                  {idx.change >= 0 ? '+' : ''}{formatPrice(idx.change)} ({formatPercent(idx.changePercent)})
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Top Gainers */}
-          <div className="bg-[#141417] border border-[#27272A] rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#27272A]">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-500" />
-                Top Gainers
-              </h3>
-              <span className="text-xs text-zinc-500">NIFTY 50</span>
-            </div>
-            <div className="divide-y divide-[#1C1C21]">
-              {loading && gainers.length === 0 ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="px-4 py-3 animate-pulse">
-                    <div className="h-4 w-full bg-zinc-800 rounded" />
-                  </div>
-                ))
-              ) : gainers.length === 0 ? (
-                <div className="px-4 py-8 text-center text-zinc-500 text-sm">No data yet</div>
-              ) : (
-                gainers.map((stock) => (
-                  <Link
-                    key={stock.symbol}
-                    href={`/chart/${encodeURIComponent(stock.symbol)}`}
-                    className="flex items-center justify-between px-4 py-3 hover:bg-[#1C1C21] transition-colors"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{cleanSymbol(stock.symbol)}</div>
-                      <div className="text-xs text-zinc-500 truncate max-w-[140px]">{stock.name}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-mono">₹{formatPrice(stock.ltp)}</div>
-                      <div className="text-xs font-mono text-emerald-400">{formatPercent(stock.changePercent)}</div>
-                    </div>
-                  </Link>
-                ))
-              )}
-            </div>
+        {/* 1. TOP MARKET BREADTH SCATTER STRIP (Dots around Zero) */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-mono uppercase tracking-wider font-semibold text-slate-300">
+              Stage 1 · Market Breadth & Flow (Dots around 0% Line)
+            </span>
+            <span className="font-mono text-[11px] text-cyan-400">
+              Tap any dot to inspect Order Block zone
+            </span>
           </div>
 
-          {/* Top Losers */}
-          <div className="bg-[#141417] border border-[#27272A] rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#27272A]">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <TrendingDown className="w-4 h-4 text-red-500" />
-                Top Losers
-              </h3>
-              <span className="text-xs text-zinc-500">NIFTY 50</span>
-            </div>
-            <div className="divide-y divide-[#1C1C21]">
-              {loading && losers.length === 0 ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="px-4 py-3 animate-pulse">
-                    <div className="h-4 w-full bg-zinc-800 rounded" />
-                  </div>
-                ))
-              ) : losers.length === 0 ? (
-                <div className="px-4 py-8 text-center text-zinc-500 text-sm">No data yet</div>
-              ) : (
-                losers.map((stock) => (
-                  <Link
-                    key={stock.symbol}
-                    href={`/chart/${encodeURIComponent(stock.symbol)}`}
-                    className="flex items-center justify-between px-4 py-3 hover:bg-[#1C1C21] transition-colors"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{cleanSymbol(stock.symbol)}</div>
-                      <div className="text-xs text-zinc-500 truncate max-w-[140px]">{stock.name}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-mono">₹{formatPrice(stock.ltp)}</div>
-                      <div className="text-xs font-mono text-red-400">{formatPercent(stock.changePercent)}</div>
-                    </div>
-                  </Link>
-                ))
-              )}
-            </div>
-          </div>
+          <BreadthScatterStrip
+            terminal={terminalData}
+            onSelectStock={handleSelectSymbol}
+            selectedSymbol={selectedStock?.symbol}
+          />
+        </section>
 
-          {/* Sector Heatmap */}
-          <div className="bg-[#141417] border border-[#27272A] rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#27272A]">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-violet-500" />
-                Sector Performance
-              </h3>
-            </div>
-            <div className="p-4 space-y-2">
-              {loading && sectors.length === 0 ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-8 bg-zinc-800 rounded animate-pulse" />
-                ))
-              ) : sectors.length === 0 ? (
-                <div className="py-8 text-center text-zinc-500 text-sm">No data yet</div>
-              ) : (
-                sectors.map((sector) => (
-                  <div
-                    key={sector.name}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                      sector.avgChange > 1 ? 'heat-strong-up' :
-                      sector.avgChange > 0 ? 'heat-up' :
-                      sector.avgChange > -1 ? 'heat-down' : 'heat-strong-down'
-                    }`}
-                  >
-                    <span className="text-sm font-medium">{sector.name}</span>
-                    <span className={`text-sm font-mono font-medium ${
-                      sector.avgChange >= 0 ? 'text-emerald-400' : 'text-red-400'
-                    }`}>
-                      {formatPercent(sector.avgChange)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Full Stock List */}
-        <div className="bg-[#141417] border border-[#27272A] rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#27272A]">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-500" />
-              NIFTY 50 Stocks
-            </h3>
+        {/* 2. THE PICKS HIGHLIGHT STRIP (Top 3 Bullish + Top 3 Bearish) */}
+        <section className="rounded-xl border border-slate-800/80 bg-[#0d121f] p-4 shadow-lg">
+          <div className="mb-3 flex items-center justify-between border-b border-slate-800 pb-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500">{stockList.length} stocks loaded</span>
-              <Link
-                href="/screener"
-                className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-              >
-                <Zap className="w-3 h-3" />
-                Full Screener
-              </Link>
+              <span className="flex h-2 w-2 rounded-full bg-cyan-400" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                Generated Sample Shortlist (Max 2 Per Sector)
+              </h2>
             </div>
+            <span className="font-mono text-[11px] text-slate-400">
+              3 bullish + 3 bearish examples
+            </span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-zinc-500 border-b border-[#1C1C21]">
-                  <th className="text-left px-4 py-2 font-medium">Symbol</th>
-                  <th className="text-right px-4 py-2 font-medium">LTP</th>
-                  <th className="text-right px-4 py-2 font-medium">Change</th>
-                  <th className="text-right px-4 py-2 font-medium hidden sm:table-cell">Open</th>
-                  <th className="text-right px-4 py-2 font-medium hidden md:table-cell">High</th>
-                  <th className="text-right px-4 py-2 font-medium hidden md:table-cell">Low</th>
-                  <th className="text-right px-4 py-2 font-medium hidden lg:table-cell">Volume</th>
-                  <th className="text-center px-4 py-2 font-medium">Chart</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1C1C21]">
-                {loading && stockList.length === 0 ? (
-                  Array.from({ length: 10 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse">
-                      <td className="px-4 py-3"><div className="h-4 w-20 bg-zinc-800 rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 bg-zinc-800 rounded ml-auto" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-14 bg-zinc-800 rounded ml-auto" /></td>
-                      <td className="px-4 py-3 hidden sm:table-cell"><div className="h-4 w-16 bg-zinc-800 rounded ml-auto" /></td>
-                      <td className="px-4 py-3 hidden md:table-cell"><div className="h-4 w-16 bg-zinc-800 rounded ml-auto" /></td>
-                      <td className="px-4 py-3 hidden md:table-cell"><div className="h-4 w-16 bg-zinc-800 rounded ml-auto" /></td>
-                      <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 w-14 bg-zinc-800 rounded ml-auto" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-8 bg-zinc-800 rounded mx-auto" /></td>
-                    </tr>
-                  ))
-                ) : (
-                  stockList.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)).map((stock) => (
-                    <tr key={stock.symbol} className="hover:bg-[#1C1C21] transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-medium">{cleanSymbol(stock.symbol)}</div>
-                        <div className="text-xs text-zinc-500 truncate max-w-[120px]">{stock.name}</div>
-                      </td>
-                      <td className="text-right px-4 py-3 font-mono">₹{formatPrice(stock.ltp)}</td>
-                      <td className={`text-right px-4 py-3 font-mono font-medium ${
-                        stock.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400'
-                      }`}>
-                        {formatPercent(stock.changePercent)}
-                      </td>
-                      <td className="text-right px-4 py-3 font-mono text-zinc-400 hidden sm:table-cell">
-                        ₹{formatPrice(stock.open)}
-                      </td>
-                      <td className="text-right px-4 py-3 font-mono text-zinc-400 hidden md:table-cell">
-                        ₹{formatPrice(stock.high)}
-                      </td>
-                      <td className="text-right px-4 py-3 font-mono text-zinc-400 hidden md:table-cell">
-                        ₹{formatPrice(stock.low)}
-                      </td>
-                      <td className="text-right px-4 py-3 font-mono text-zinc-400 hidden lg:table-cell">
-                        {formatVolume(stock.volume)}
-                      </td>
-                      <td className="text-center px-4 py-3">
-                        <Link
-                          href={`/chart/${encodeURIComponent(stock.symbol)}`}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition-colors"
-                        >
-                          <Eye className="w-3 h-3" />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        {/* Footer disclaimer */}
-        <div className="text-center text-xs text-zinc-600 py-4 border-t border-[#1C1C21]">
-          <p>MarketPulse — Free & Open Source. For educational purposes only. Not investment advice.</p>
-          <p className="mt-1">Data sourced from Yahoo Finance. Prices may be delayed.</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            {/* Top 3 Bullish Picks */}
+            {terminalData.topBullishPicks.slice(0, 3).map((pick, i) => (
+              <div
+                key={pick.symbol}
+                onClick={() => setSelectedStock(pick)}
+                className="group relative cursor-pointer rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-2.5 transition hover:border-emerald-400 hover:bg-emerald-900/30"
+              >
+                <div className="flex items-center justify-between text-[10px] font-mono font-bold text-emerald-400">
+                  <span>PICK #{i + 1}</span>
+                  <ArrowUpRight className="h-3 w-3" />
+                </div>
+                <div className="mt-1 font-bold text-white group-hover:text-emerald-300 text-sm">
+                  {pick.symbol}
+                </div>
+                <div className="flex items-center justify-between text-xs font-mono mt-1">
+                  <span className="text-slate-300 font-semibold">{pick.changePct >= 0 ? "+" : ""}{pick.changePct}%</span>
+                  <span className="text-cyan-400 font-bold">{pick.strengthScore}x</span>
+                </div>
+                <div className="mt-1 text-[9px] text-slate-400 truncate">
+                  Z: {pick.zoneLevelZ} · R:R {pick.riskRewardRatio}
+                </div>
+              </div>
+            ))}
+
+            {/* Top 3 Bearish Picks */}
+            {terminalData.topBearishPicks.slice(0, 3).map((pick, i) => (
+              <div
+                key={pick.symbol}
+                onClick={() => setSelectedStock(pick)}
+                className="group relative cursor-pointer rounded-lg border border-rose-500/30 bg-rose-950/20 p-2.5 transition hover:border-rose-400 hover:bg-rose-900/30"
+              >
+                <div className="flex items-center justify-between text-[10px] font-mono font-bold text-rose-400">
+                  <span>PICK #{i + 1}</span>
+                  <ArrowDownRight className="h-3 w-3" />
+                </div>
+                <div className="mt-1 font-bold text-white group-hover:text-rose-300 text-sm">
+                  {pick.symbol}
+                </div>
+                <div className="flex items-center justify-between text-xs font-mono mt-1">
+                  <span className="text-slate-300 font-semibold">{pick.changePct}%</span>
+                  <span className="text-cyan-400 font-bold">{pick.strengthScore}x</span>
+                </div>
+                <div className="mt-1 text-[9px] text-slate-400 truncate">
+                  Z: {pick.zoneLevelZ} · R:R {pick.riskRewardRatio}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* 3. DUAL BOARDS (BULLISH & BEARISH BOARDS) */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-mono uppercase tracking-wider font-semibold text-slate-300">
+              Stage 2 & 3 · Contender Boards (Normalized Strength Ranking)
+            </span>
+            <span className="text-slate-400">
+              strength = move from open ÷ 50-day average daily move
+            </span>
+          </div>
+
+          <BullBearBoards
+            bullishBoard={terminalData.bullishBoard}
+            bearishBoard={terminalData.bearishBoard}
+            onSelectStock={(stock) => setSelectedStock(stock)}
+            selectedSymbol={selectedStock?.symbol}
+          />
+        </section>
+
+        {/* Methodology Notes & Disclosures Callout */}
+        <div className="rounded-xl border border-slate-800 bg-[#0d121f] p-4 text-xs text-slate-400 space-y-2">
+          <div className="flex items-center gap-2 font-bold text-slate-300">
+            <Info className="h-4 w-4 text-cyan-400" />
+            <span>How OrderBlock Rankings Work</span>
+          </div>
+          <p>
+            Each stock is scored as <code className="text-cyan-300 bg-slate-900 px-1 py-0.5 rounded">strength = today's one-directional move from open ÷ average daily move</code>.
+            A move counts only when one side exceeds twice the distance on the other side (2:1 direction gate); choppy stocks score zero.
+            Order block price zones and structural levels (Z, S1, R1/R2) update on completed 5-minute candles.
+          </p>
         </div>
       </main>
-    </>
+
+      {/* DIAGNOSTIC ORDER BLOCK POPUP MODAL */}
+      <OrderBlockPopup
+        card={selectedStock}
+        onClose={() => setSelectedStock(null)}
+      />
+
+      {/* SEBI Educational Bar */}
+      <SebiDisclaimerBar />
+    </div>
   );
 }
