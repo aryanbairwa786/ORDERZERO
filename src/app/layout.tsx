@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MarketPulse — Live Smart Money Analytics for Indian Stocks",
-  description: "Free real-time Order Block, FVG, BOS/CHoCH detection for NIFTY 50 & F&O stocks. Smart Money Concepts (SMC) analytics platform for Indian equities.",
+  title: "OrderZero — Market Structure Learning Terminal",
+  description: "An educational Indian-market terminal with a generated order-block demo, chart studies, a playbook, and a trade journal.",
   keywords: "order block, smart money concepts, SMC, Indian stocks, NIFTY 50, F&O, liquidity, FVG, BOS, CHoCH",
 };
 
