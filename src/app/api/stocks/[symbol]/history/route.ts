@@ -1,4 +1,4 @@
-// API route to fetch historical OHLCV data for charts with robust fallbacks
+// Yahoo Finance is unofficial. The only fallback is explicitly labeled demo data.
 import { NextResponse } from 'next/server';
 
 const YAHOO_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart';
@@ -64,10 +64,24 @@ export async function GET(
   { params }: { params: Promise<{ symbol: string }> }
 ) {
   const { symbol } = await params;
-  const decodedSymbol = decodeURIComponent(symbol);
   const { searchParams } = new URL(request.url);
-  const interval = searchParams.get('interval') || '15m';
-  const range = searchParams.get('range') || '60d';
+  const allowedIntervals = new Set(['1m', '5m', '15m', '30m', '60m', '1d', '1wk', '1mo']);
+  const allowedRanges = new Set(['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'max']);
+  const requestedInterval = searchParams.get('interval') || '15m';
+  const requestedRange = searchParams.get('range') || '60d';
+  const interval = allowedIntervals.has(requestedInterval) ? requestedInterval : '15m';
+  const range = allowedRanges.has(requestedRange) ? requestedRange : '3mo';
+  const inputSymbol = symbol.trim().toUpperCase();
+  const symbolAliases: Record<string, string> = {
+    'NIFTY 50': '^NSEI',
+    'BANK NIFTY': '^NSEBANK',
+    'NIFTY IT': '^CNXIT',
+    'NIFTY FIN SERVICE': 'NIFTY_FIN_SERVICE.NS',
+  };
+  const decodedSymbol = symbolAliases[inputSymbol] ?? inputSymbol;
+  if (!/^[A-Z0-9^=._&-]{1,32}$/.test(decodedSymbol)) {
+    return NextResponse.json({ error: 'Unsupported symbol.' }, { status: 400 });
+  }
 
   try {
     const res = await fetch(
@@ -105,6 +119,8 @@ export async function GET(
 
         if (candles.length > 0) {
           return NextResponse.json({
+            mode: 'yahoo_finance_unofficial',
+            data_notice: 'Unofficial Yahoo Finance history; it may be delayed, incomplete, or unavailable.',
             symbol: result.meta?.symbol || decodedSymbol,
             name: result.meta?.shortName || result.meta?.longName || decodedSymbol,
             currency: result.meta?.currency || 'INR',
@@ -113,14 +129,14 @@ export async function GET(
             meta: {
               regularMarketPrice: result.meta?.regularMarketPrice || candles[candles.length - 1].close,
               previousClose: result.meta?.chartPreviousClose || result.meta?.previousClose || candles[0].open,
-              regularMarketTime: result.meta?.regularMarketTime || Date.now(),
+              regularMarketTime: result.meta?.regularMarketTime || timestamps[timestamps.length - 1] || Math.floor(Date.now() / 1000),
             },
           });
         }
       }
     }
   } catch (error) {
-    console.error('History fetch error, using fallback:', error);
+  console.warn('Unofficial history unavailable; returning labeled demo candles.');
   }
 
   // Graceful fallback for offline, rate-limited, or weekend requests
@@ -129,6 +145,8 @@ export async function GET(
   const lastCandle = fallbackCandles[fallbackCandles.length - 1];
 
   return NextResponse.json({
+    mode: 'synthetic_demo',
+    data_notice: 'Generated example candles because upstream history was unavailable. These values are not market data.',
     symbol: decodedSymbol,
     name: decodedSymbol.replace('.NS', ''),
     currency: 'INR',
@@ -137,7 +155,7 @@ export async function GET(
     meta: {
       regularMarketPrice: lastCandle.close,
       previousClose: fallbackCandles[0].open,
-      regularMarketTime: Math.floor(Date.now() / 1000),
+      regularMarketTime: lastCandle.time,
     },
   });
 }
