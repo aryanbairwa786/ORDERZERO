@@ -48,11 +48,11 @@ export function isMarketOpen(): boolean {
   const now = getISTTime();
   const day = now.getDay();
   if (day === 0 || day === 6) return false; // Weekend
-  
+
   const hours = now.getHours();
   const minutes = now.getMinutes();
   const timeInMinutes = hours * 60 + minutes;
-  
+
   // NSE: 9:15 AM to 3:30 PM IST
   return timeInMinutes >= 555 && timeInMinutes <= 930;
 }
@@ -61,11 +61,11 @@ export function getMarketStatus(): string {
   const now = getISTTime();
   const day = now.getDay();
   if (day === 0 || day === 6) return 'Weekend';
-  
+
   const hours = now.getHours();
   const minutes = now.getMinutes();
   const timeInMinutes = hours * 60 + minutes;
-  
+
   if (timeInMinutes < 540) return 'Pre-Market';
   if (timeInMinutes < 555) return 'Pre-Open';
   if (timeInMinutes <= 930) return 'Market Open';

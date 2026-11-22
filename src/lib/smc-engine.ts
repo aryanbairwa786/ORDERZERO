@@ -46,7 +46,7 @@ export function detectSwingPoints(candles: Candle[], lookback: number = 5): Stru
 // Detect BOS (Break of Structure) and CHoCH (Change of Character)
 export function detectStructureBreaks(candles: Candle[], swingPoints: StructurePoint[]): StructureBreak[] {
   const breaks: StructureBreak[] = [];
-  
+
   const highs = swingPoints.filter(p => p.type === 'HH' || p.type === 'LH');
   const lows = swingPoints.filter(p => p.type === 'HL' || p.type === 'LL');
 

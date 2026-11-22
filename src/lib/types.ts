@@ -1,4 +1,4 @@
-// Core types for MarketPulse
+// Core types for OrderZero
 
 export interface Candle {
   time: number;
@@ -85,6 +85,7 @@ export interface StockData {
   volume: number;
   prevClose: number;
   timestamp: number;
+  dataSource?: 'yahoo_finance_unofficial' | 'synthetic_demo' | string;
 }
 
 export interface IndexData {
@@ -93,9 +94,9 @@ export interface IndexData {
   value: number;
   change: number;
   changePercent: number;
-  advance: number;
-  decline: number;
-  unchanged: number;
+  advance?: number;
+  decline?: number;
+  unchanged?: number;
 }
 
 export interface OptionData {
