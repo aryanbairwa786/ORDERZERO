@@ -1,83 +1,62 @@
-// API route to fetch NSE indices data with fallback
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from "next/server";
 
-const YAHOO_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart';
-
+const YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
 const INDICES = [
-  { symbol: '^NSEI', name: 'NIFTY 50', base: 24450.8 },
-  { symbol: '^NSEBANK', name: 'BANK NIFTY', base: 51240.5 },
-  { symbol: '^CNXIT', name: 'NIFTY IT', base: 38920.0 },
-  { symbol: '^CNXFIN', name: 'NIFTY FIN SERVICE', base: 23680.0 },
+  { symbol: "^NSEI", name: "NIFTY 50" },
+  { symbol: "^NSEBANK", name: "BANK NIFTY" },
+  { symbol: "^CNXIT", name: "NIFTY IT" },
+  { symbol: "NIFTY_FIN_SERVICE.NS", name: "NIFTY FIN SERVICE" },
 ];
+const DATA_NOTICE =
+  "Unofficial Yahoo Finance index data; values may be delayed, incomplete, rate-limited, or unavailable. Missing indices are omitted.";
+
+async function fetchIndex(index: (typeof INDICES)[number]) {
+  const url =
+    YAHOO_BASE +
+    "/" +
+    encodeURIComponent(index.symbol) +
+    "?interval=1d&range=2d";
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+    next: { revalidate: 30 },
+  });
+  if (!response.ok) throw new Error("Yahoo Finance request failed.");
+
+  const body = await response.json();
+  const meta = body.chart?.result?.[0]?.meta;
+  if (!meta) throw new Error("Index metadata is unavailable.");
+
+  const value = Number(meta.regularMarketPrice);
+  const previousClose = Number(meta.chartPreviousClose ?? meta.previousClose);
+  if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(previousClose) || previousClose <= 0) {
+    throw new Error("Valid index quote and previous close are unavailable.");
+  }
+
+  return {
+    symbol: index.symbol,
+    name: index.name,
+    value,
+    change: value - previousClose,
+    changePercent: ((value - previousClose) / previousClose) * 100,
+    timestamp: Number(meta.regularMarketTime ?? 0) * 1000,
+    dataSource: "yahoo_finance_unofficial",
+  };
+}
 
 export async function GET() {
-  try {
-    const results = await Promise.allSettled(
-      INDICES.map(async (idx) => {
-        const res = await fetch(
-          `${YAHOO_BASE}/${encodeURIComponent(idx.symbol)}?interval=1d&range=2d`,
-          {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/json',
-            },
-            next: { revalidate: 30 },
-          }
-        );
-        if (!res.ok) throw new Error(`Failed: ${idx.symbol}`);
-        const data = await res.json();
-        const meta = data.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error(`No meta: ${idx.symbol}`);
+  const results = await Promise.allSettled(INDICES.map(fetchIndex));
+  const indices = results.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : []
+  );
+  const missingSymbols = results.flatMap((result, index) =>
+    result.status === "rejected" ? [INDICES[index].symbol] : []
+  );
 
-        const price = meta.regularMarketPrice || 0;
-        const prevClose = meta.chartPreviousClose || meta.previousClose || 0;
-
-        return {
-          symbol: idx.symbol,
-          name: idx.name,
-          value: price,
-          change: price - prevClose,
-          changePercent: prevClose ? ((price - prevClose) / prevClose) * 100 : 0,
-          advance: 0,
-          decline: 0,
-          unchanged: 0,
-        };
-      })
-    );
-
-    const indices = INDICES.map((idx, i) => {
-      const r = results[i];
-      if (r && r.status === 'fulfilled' && r.value.value > 0) {
-        return r.value;
-      }
-      // Fallback
-      const changePercent = 0.35;
-      const change = (idx.base * changePercent) / 100;
-      return {
-        symbol: idx.symbol,
-        name: idx.name,
-        value: idx.base + change,
-        change,
-        changePercent,
-        advance: 32,
-        decline: 18,
-        unchanged: 0,
-      };
-    });
-
-    return NextResponse.json({ indices, timestamp: Date.now() });
-  } catch (error) {
-    console.error('Indices fetch error:', error);
-    const fallbackIndices = INDICES.map((idx) => ({
-      symbol: idx.symbol,
-      name: idx.name,
-      value: idx.base,
-      change: 85.4,
-      changePercent: 0.35,
-      advance: 30,
-      decline: 20,
-      unchanged: 0,
-    }));
-    return NextResponse.json({ indices: fallbackIndices, timestamp: Date.now() });
-  }
+  return NextResponse.json({
+    indices,
+    timestamp: Date.now(),
+    data_mode: "unofficial_yahoo_finance",
+    data_notice: DATA_NOTICE,
+    missing_symbols: missingSymbols,
+  });
 }
