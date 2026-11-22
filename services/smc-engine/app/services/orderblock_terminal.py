@@ -1,10 +1,10 @@
 """OrderBlock Terminal Analytical Service (Reverse-Engineered Methodology).
 
-Scans 200+ Indian F&O stocks:
+Generates a synthetic terminal demo for a static reference universe:
 1. strength = today's one-directional move from open / 50-day average daily move (ADM)
 2. Direction gate: distance on one side of open must exceed >2.0x distance on adverse side
 3. Bullish Board & Bearish Board rankings
-4. Filtered Top 3 Picks: max 2 per sector (sector cap) + event-risk filter
+4. Sample Top 3 list: max 2 per sector + generated extreme-move review flag
 5. Zone reconstruction: OB Box, Z entry, S1 invalidation, targets R1/R2, R:R, VWAP
 """
 
@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from ..core.market_hours import IST, get_nse_session_status
 
-# Representative complete list of 200+ NSE F&O underlying stocks with sectors and base ADM
+# Static reference universe. Prices and ADM values below are demonstration inputs, not official market data.
 FNO_STOCKS_DATA: List[Dict[str, Any]] = [
     {
         "symbol": "NIFTY 50",
@@ -1803,14 +1803,16 @@ def _hash_seed(s: str) -> int:
     return h
 
 
-def compute_orderblock_terminal(date_str: str = "2026-11-20") -> Dict[str, Any]:
-    """Calculate the complete OrderBlock terminal state."""
+def compute_orderblock_terminal(date_str: Optional[str] = None) -> Dict[str, Any]:
+    """Calculate a deterministic synthetic demo for the static reference universe."""
+    now_ist = datetime.now(tz=IST)
+    date_str = date_str or now_ist.strftime("%Y-%m-%d")
     raw_list = []
-    
+
     for idx, inst in enumerate(FNO_STOCKS_DATA):
         seed = _hash_seed(f"{date_str}-{inst['symbol']}-{idx}")
         noise = ((seed % 1000) / 1000.0) * 2.0 - 1.0  # -1.0 to +1.0
-        
+
         # Sector tilt
         sector = inst["sector"]
         tilt = 0.0
@@ -1849,7 +1851,8 @@ def compute_orderblock_terminal(date_str: str = "2026-11-20") -> Dict[str, Any]:
 
         # 2:1 Direction Gate
         passes_gate = opp_pct == 0 or (one_dir_pct / max(opp_pct, 0.01)) >= 2.0
-        is_event_risk = one_dir_pct > adm * 3.6
+        # Synthetic excursion threshold; this is not a news or event-risk feed.
+        is_extreme_move = one_dir_pct > adm * 3.6
 
         strength_score = round(one_dir_pct / adm, 2) if passes_gate else 0.0
 
@@ -1864,7 +1867,7 @@ def compute_orderblock_terminal(date_str: str = "2026-11-20") -> Dict[str, Any]:
             "opposite_move_pct": opp_pct,
             "passes_gate": passes_gate,
             "strength_score": strength_score,
-            "is_event_risk": is_event_risk,
+            "is_extreme_move": is_extreme_move,
         })
 
     bull_contenders = sorted(
@@ -1897,20 +1900,20 @@ def compute_orderblock_terminal(date_str: str = "2026-11-20") -> Dict[str, Any]:
             rule_status = "QUALIFIED"
             rule_explanation = f"Passed 2:1 direction gate with {item['strength_score']}x ADM intraday strength."
 
-            if item["is_event_risk"]:
-                rule_status = "NOT PICKED · event risk"
-                rule_explanation = "Uncharacteristic high-volatility move without structured consolidation base."
+            if item["is_extreme_move"]:
+                rule_status = "NOT PICKED · extreme move"
+                rule_explanation = "Generated excursion exceeded the static ADM review threshold; this is not a news-based event flag."
             elif pick_num <= 3:
                 sec = item["inst"]["sector"]
                 c = sector_counts.get(sec, 0)
                 if c >= 2:
                     rule_status = "NOT PICKED · sector cap"
-                    rule_explanation = f"Max 2 picks reached for {sec} sector; risk spread."
+                    rule_explanation = f"Max 2 generated picks reached for {sec} sector."
                 else:
                     sector_counts[sec] = c + 1
                     label = f"PICK · {'BULLISH' if board_type == 'bullish' else 'BEARISH'} #{pick_num}"
                     rule_status = label
-                    rule_explanation = f"Ranked #{pick_num} clean directional move with high probability structural zone."
+                    rule_explanation = f"Generated top-three shortlist example for the {board_type} board."
                     pick_num += 1
 
             ltp = item["ltp"]
@@ -2044,11 +2047,14 @@ def compute_orderblock_terminal(date_str: str = "2026-11-20") -> Dict[str, Any]:
         reverse=True
     )
 
-    now_ist = datetime.now(tz=IST)
     session_status = get_nse_session_status(now_ist)
 
     return {
-        "brand": "OrderBlock",
+        "brand": "OrderZero",
+        "dataMode": "synthetic_demo",
+        "dataNotice": "Generated demonstration prices, candles, ADM values, and order block levels from static reference inputs. No exchange feed is connected.",
+        "generatedAtIST": now_ist.isoformat(),
+        "referenceUniverseCount": len(raw_list),
         "marketStatus": "OPEN" if session_status == "open" else "CLOSED",
         "sessionTimeIST": f"{now_ist.strftime('%H:%M')} IST ({session_status.upper()})",
         "refreshSecondsLeft": 60,

@@ -1,4 +1,4 @@
-"""Real-time NIFTY 500 / NSE F&O SMC Screener Service."""
+"""SMC scanner over a small static reference-symbol sample."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class InstrumentMeta:
     base_price: float
 
 
-# Representative NSE F&O & NIFTY 500 universe (extensible via DB/CSV scrip master)
+# Small static sample; this list is not a complete or current exchange F&O master.
 NSE_UNIVERSE: List[InstrumentMeta] = [
     InstrumentMeta("NIFTY 50", "NSE", "Index", "Large", True, 24350.0),
     InstrumentMeta("BANK NIFTY", "NSE", "Banking", "Large", True, 52100.0),
@@ -74,7 +74,7 @@ def run_smc_scan(
             continue
 
         # Temporarily register base price for realistic symbol scaling in Demo Mode
-        candles, qmeta, _ = adapter.fetch_candles_with_meta(meta.symbol, meta.exchange, timeframe)
+        candles, qmeta, source = adapter.fetch_candles_with_meta(meta.symbol, meta.exchange, timeframe)
         if len(candles) < 20:
             continue
 
@@ -159,6 +159,7 @@ def run_smc_scan(
                 "unfilled_fvgs": unfilled_fvgs,
                 "signals": signals,
                 "sparkline": sparkline,
+                "data_source": source,
             }
         )
 
