@@ -19,25 +19,24 @@ from .core.market_hours import IST, get_nse_session_status, to_ist
 from .core.models import Candle, SMCConfig
 from .services.alerts import AlertStore
 from .services.backtester import run_ob_backtest
-from .services.options_chain import build_demo_option_chain
-from .services.screener import run_smc_scan
+from .services.screener import NSE_UNIVERSE, run_smc_scan
 from .services.orderblock_terminal import compute_orderblock_terminal
 
 SEBI_DISCLAIMER = (
     "For educational and informational purposes only. Not investment advice. "
-    "We are not SEBI-registered investment advisers / research analysts."
+    "Data may be generated or unofficial; verify independently."
 )
 
 app = FastAPI(
-    title="OrderZero — Complete Indian Stock Market SMC API",
+    title="OrderZero SMC Analysis API",
     version="2.0.0",
-    description="SMC Detection Engine, DhanHQ v2 Feed, NIFTY 500 Screener, Options Chain, Backtester & Alerts.",
+    description="SMC analysis engine, optional DhanHQ session, sample NSE screener, backtester and alerts.",
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -117,8 +116,10 @@ class BacktestRequest(BaseModel):
 def health() -> Dict[str, Any]:
     now_ist = datetime.now(tz=IST)
     return {
-        "brand": "OrderBlock",
+        "brand": "OrderZero",
         "status": "ok",
+        "data_mode": "demo_with_optional_unofficial_yahoo",
+        "data_notice": "Terminal prices and options are not exchange data. Chart snapshots may use unofficial Yahoo Finance data or generated demo candles.",
         "server_time_ist": now_ist.isoformat(),
         "nse_session_status": get_nse_session_status(now_ist),
         "disclaimer": SEBI_DISCLAIMER,
@@ -127,7 +128,7 @@ def health() -> Dict[str, Any]:
 
 @app.get("/api/v1/orderblock/terminal")
 def get_orderblock_terminal() -> Dict[str, Any]:
-    """Return live 200+ F&O market breadth scatter, Bull/Bear boards, and Top 3 picks."""
+    """Return generated demonstration values for the static reference universe."""
     return compute_orderblock_terminal()
 
 
@@ -247,6 +248,7 @@ def dhan_live_analysis(payload: DhanAnalyzeRequest) -> Dict[str, Any]:
     return {
         "brand": "OrderZero",
         "mode": "dhan_hq",
+        "data_notice": "Candles are returned by the DhanHQ account supplied for this request. Availability, delay, and licensing depend on that account.",
         "candles": [c.to_dict() for c in candles],
         "analysis": result.to_dict(),
     }
@@ -273,6 +275,9 @@ def screener_scan(
     )
     return {
         "brand": "OrderZero",
+        "data_mode": "unofficial_yahoo_or_generated_demo",
+        "coverage_note": "Sample set of 22 reference symbols. Rows use unofficial Yahoo Finance data or generated fallback candles; this is not a full current F&O feed.",
+        "universe_count": len(NSE_UNIVERSE),
         "scanned_at_ist": datetime.now(tz=IST).isoformat(),
         "count": len(rows),
         "rows": rows,
@@ -282,14 +287,19 @@ def screener_scan(
 
 @app.get("/api/v1/options/chain")
 def options_chain(symbol: str = Query(default="NIFTY 50")) -> Dict[str, Any]:
-    return build_demo_option_chain(symbol=symbol)
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            f"No licensed options-data provider is configured for {symbol}. The free build does not estimate or invent option prices, OI, IV, PCR, or Max Pain."
+        ),
+    )
 
 
 @app.post("/api/v1/backtest")
 def backtest_ob(payload: BacktestRequest) -> Dict[str, Any]:
     exchange = "BSE" if payload.symbol.upper() in ("SENSEX", "BANKEX") else "NSE"
-    candles, _ = market_adapter.fetch_candles(symbol=payload.symbol, exchange=exchange, timeframe=payload.timeframe)
-    return run_ob_backtest(
+    candles, source = market_adapter.fetch_candles(symbol=payload.symbol, exchange=exchange, timeframe=payload.timeframe)
+    result = run_ob_backtest(
         candles=candles,
         symbol=payload.symbol,
         timeframe=payload.timeframe,
@@ -297,6 +307,13 @@ def backtest_ob(payload: BacktestRequest) -> Dict[str, Any]:
         risk_per_trade_pct=payload.risk_per_trade_pct,
         reward_r_multiple=payload.reward_r_multiple,
     )
+    result["data_source"] = source
+    result["coverage_note"] = (
+        "Generated demo candles; not historical market data."
+        if source == "offline_demo"
+        else "Unofficial Yahoo Finance history; may be delayed, incomplete, or unavailable."
+    )
+    return result
 
 
 @app.get("/api/v1/alerts")
@@ -352,45 +369,22 @@ def dashboard_summary() -> Dict[str, Any]:
             market_adapter.fetch_latest_quote("SENSEX", "BSE"),
         ] if q is not None
     ]
-    if not indices:
-        indices = [
-            {"symbol": "NIFTY 50", "ltp": 24362.45, "change_pct": 0.64},
-            {"symbol": "BANK NIFTY", "ltp": 52148.10, "change_pct": 0.82},
-            {"symbol": "FIN NIFTY", "ltp": 23815.30, "change_pct": 0.51},
-            {"symbol": "SENSEX", "ltp": 79864.20, "change_pct": 0.59},
-        ]
-
     vix_q = market_adapter.fetch_latest_quote("INDIA VIX", "NSE")
     return {
         "brand": "OrderZero",
+        "data_mode": "unofficial_yahoo_or_generated_demo",
+        "data_notice": "Index and sector quotes use unofficial Yahoo Finance requests when available; breadth and top setups scan 22 reference symbols and may use generated fallback candles.",
         "nse_session_status": get_nse_session_status(now_ist),
         "updated_at_ist": now_ist.isoformat(),
         "indices": indices,
-        "india_vix": (
-            {"value": vix_q["ltp"], "change_pct": vix_q["change_pct"]}
-            if vix_q
-            else {"value": 13.42, "change_pct": 0.0}
-        ),
+        "india_vix": {"value": vix_q["ltp"], "change_pct": vix_q["change_pct"]} if vix_q else None,
         "market_breadth": {
             "advances": advances,
             "declines": declines,
             "unchanged": unchanged,
         },
-        "fii_dii_cr": {
-            "fii_net_cr": 0.0,
-            "dii_net_cr": 0.0,
-            "date": f"EOD ({now_ist.date().isoformat()})",
-        },
-        "sector_heatmap": real_sectors or [
-            {"sector": "Banking", "change_pct": 0.0},
-            {"sector": "IT", "change_pct": 0.0},
-            {"sector": "Auto", "change_pct": 0.0},
-            {"sector": "Pharma", "change_pct": 0.0},
-            {"sector": "Energy", "change_pct": 0.0},
-            {"sector": "FMCG", "change_pct": 0.0},
-            {"sector": "Infra", "change_pct": 0.0},
-            {"sector": "Metals", "change_pct": 0.0},
-        ],
+        "fii_dii_cr": None,
+        "sector_heatmap": real_sectors,
         "top_ob_setups": top_setups,
         "disclaimer": SEBI_DISCLAIMER,
     }
@@ -398,7 +392,7 @@ def dashboard_summary() -> Dict[str, Any]:
 
 @app.websocket("/ws/ticks/{symbol}")
 async def websocket_live_ticks(websocket: WebSocket, symbol: str) -> None:
-    """Stream REAL live NSE/BSE ticks during market hours (DhanHQ v2 or Yahoo live quotes); stop when closed."""
+    """Stream DhanHQ ticks only when the caller supplies a user session."""
     await websocket.accept()
     client_id = websocket.query_params.get("client_id")
     access_token = websocket.query_params.get("access_token")
@@ -406,34 +400,40 @@ async def websocket_live_ticks(websocket: WebSocket, symbol: str) -> None:
 
     try:
         status = get_nse_session_status(datetime.now(tz=IST))
+        if not client_id or not access_token:
+            await websocket.send_json({
+                "type": "stream_unavailable",
+                "symbol": symbol,
+                "source": "none",
+                "message": "Connect a DhanHQ session to receive streaming ticks.",
+            })
+            return
+
         if status != "open":
             await websocket.send_json(
                 {
                     "type": "market_status",
                     "symbol": symbol,
                     "nse_session_status": status,
-                    "message": "NSE Market Closed — Showing exact previous session close",
+                    "message": "NSE market session is closed; streaming may not be available.",
                 }
             )
             return
 
-        if client_id and access_token:
-            dhan = DhanHQAdapter(
-                BrokerCredentials(
-                    broker=BrokerName.DHAN,
-                    client_id=client_id,
-                    access_token=access_token,
-                )
+        dhan = DhanHQAdapter(
+            BrokerCredentials(
+                broker=BrokerName.DHAN,
+                client_id=client_id,
+                access_token=access_token,
             )
-            stream = dhan.stream_ticks(exchange, [symbol])
-        else:
-            # Free real-time NSE/BSE quote polling during live market hours (no fake sine wave)
-            stream = market_adapter.stream_live_quotes(symbol=symbol, exchange=exchange, poll_seconds=3.0)
+        )
+        stream = dhan.stream_ticks(exchange, [symbol])
 
         async for tick in stream:
             await websocket.send_json(
                 {
                     "type": "tick",
+                    "source": "dhan_hq",
                     "symbol": symbol,
                     "timestamp": tick.timestamp.isoformat(),
                     "price": tick.price,
