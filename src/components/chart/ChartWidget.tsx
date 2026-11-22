@@ -40,20 +40,33 @@ export default function ChartWidget({ symbol, timeframe, onTimeframeChange, laye
   const markersPluginRef = useRef<ReturnType<typeof createSeriesMarkers<Time>> | null>(null);
   const [smcAnalysis, setSMCAnalysis] = useState<SMCAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dataMode, setDataMode] = useState<string | null>(null);
+  const [dataNotice, setDataNotice] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [stockInfo, setStockInfo] = useState<{ name: string; price: number; change: number; changePercent: number } | null>(null);
   const [crosshairData, setCrosshairData] = useState<{ time: string; o: number; h: number; l: number; c: number; v: number } | null>(null);
 
   const fetchAndRender = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const interval = getYahooInterval(timeframe);
       const range = getYahooRange(timeframe);
       const res = await fetch(`/api/stocks/${encodeURIComponent(symbol)}/history?interval=${interval}&range=${range}`);
-      if (!res.ok) throw new Error('Failed to fetch');
+      if (!res.ok) throw new Error('Chart history is temporarily unavailable.');
       const data = await res.json();
+      setDataMode(data.mode ?? 'unknown');
+      setDataNotice(data.data_notice ?? 'Source status was not supplied by the data provider.');
 
       const candles: Candle[] = data.candles || [];
-      if (candles.length === 0) return;
+      if (candles.length === 0) {
+        setStockInfo(null);
+        setSMCAnalysis(null);
+        setFetchError('No chart candles were returned for this symbol and timeframe.');
+        candleSeriesRef.current?.setData([]);
+        volumeSeriesRef.current?.setData([]);
+        return;
+      }
 
       // Set stock info
       const lastCandle = candles[candles.length - 1];
@@ -116,6 +129,9 @@ export default function ChartWidget({ symbol, timeframe, onTimeframeChange, laye
 
     } catch (err) {
       console.error('Chart fetch error:', err);
+      setDataMode(null);
+      setDataNotice(null);
+      setFetchError(err instanceof Error ? err.message : 'Chart history is temporarily unavailable.');
     } finally {
       setLoading(false);
     }
@@ -265,6 +281,14 @@ export default function ChartWidget({ symbol, timeframe, onTimeframeChange, laye
           ))}
         </div>
       </div>
+
+      <div role="note" className={`border-b px-4 py-2 text-xs ${
+        dataMode === 'synthetic_demo' ? 'border-amber-500/30 bg-amber-500/10 text-amber-100' : 'border-sky-500/20 bg-sky-500/5 text-sky-100'
+      }`}>
+        <strong className="mr-2 font-mono">{dataMode === 'synthetic_demo' ? 'SYNTHETIC DEMO' : dataMode === 'yahoo_finance_unofficial' ? 'UNOFFICIAL YAHOO FINANCE' : 'DATA SOURCE'}</strong>
+        {dataNotice ?? 'Waiting for data source information.'}
+      </div>
+      {fetchError && <div role="alert" className="border-b border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-200">{fetchError}</div>}
 
       {/* OHLCV overlay */}
       {crosshairData && (
