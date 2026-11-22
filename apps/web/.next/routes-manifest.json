@@ -1,0 +1,132 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/stocks/[symbol]/history",
+      "regex": "^/api/stocks/([^/]+?)/history(?:/)?$",
+      "routeKeys": {
+        "nxtPsymbol": "nxtPsymbol"
+      },
+      "namedRegex": "^/api/stocks/(?<nxtPsymbol>[^/]+?)/history(?:/)?$"
+    },
+    {
+      "page": "/chart/[symbol]",
+      "regex": "^/chart/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPsymbol": "nxtPsymbol"
+      },
+      "namedRegex": "^/chart/(?<nxtPsymbol>[^/]+?)(?:/)?$",
+      "prefetchSegmentDataRoutes": [
+        {
+          "destination": "/chart/[symbol].segments/chart/$d$symbol$segment",
+          "source": "^/chart/(?<nxtPsymbol>[^/]+?)\\.segments/chart/\\$d\\$symbol(?<segment>/__PAGE__\\.segment\\.rsc|\\.segment\\.rsc)(?:/)?$",
+          "routeKeys": {
+            "nxtPsymbol": "nxtPsymbol"
+          }
+        }
+      ]
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/api/nse/indices",
+      "regex": "^/api/nse/indices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/nse/indices(?:/)?$"
+    },
+    {
+      "page": "/api/stocks",
+      "regex": "^/api/stocks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/stocks(?:/)?$"
+    },
+    {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/options",
+      "regex": "^/options(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/options(?:/)?$"
+    },
+    {
+      "page": "/screener",
+      "regex": "^/screener(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/screener(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": true,
+    "dynamicRSCPrerender": true
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  },
+  "ppr": {
+    "chain": {
+      "headers": {
+        "next-resume": "1"
+      }
+    }
+  }
+}

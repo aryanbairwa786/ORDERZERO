@@ -1,0 +1,42 @@
+{
+  "status": 200,
+  "headers": {
+    "link": "</_next/static/chunks/10cpzch8u6mzq.css>; rel=preload; as=\"style\"",
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/chart/layout,_N_T_/chart/[symbol]/layout,_N_T_/chart/[symbol]/page"
+  },
+  "postponed": "654:10[\"symbol\"][0,{\"nextSegmentId\":0,\"rootFormatContext\":{\"insertionMode\":0,\"selectedValue\":null,\"tagScope\":0,\"viewTransition\":null},\"progressiveChunkSize\":12800,\"resumableState\":{\"idPrefix\":\"\",\"nextFormID\":0,\"streamingFormat\":0,\"bootstrapScripts\":[{\"src\":\"/_next/static/chunks/3v_59l1qr_8dp.js\"}],\"instructions\":0,\"hasBody\":false,\"hasHtml\":false,\"unknownResources\":{\"font\":{}},\"dnsResources\":{},\"connectResources\":{\"default\":{},\"anonymous\":{},\"credentials\":{}},\"imageResources\":{},\"styleResources\":{\"/_next/static/chunks/10cpzch8u6mzq.css\":[]},\"scriptResources\":{},\"moduleUnknownResources\":{},\"moduleScriptResources\":{}},\"replayNodes\":[],\"replaySlots\":-1}]null",
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/chart/$d$symbol/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 49216,
+    "slots": {
+      "children": {
+        "hints": 49248,
+        "slots": {
+          "children": {
+            "hints": 49248,
+            "slots": {
+              "children": {
+                "hints": 49312,
+                "slots": null
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/15531b91043163f13c70a327b536cfcc70129a16c5fdd6440b37bd3c27f0ecd5/$/chart/[symbol]",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/chart/[symbol]/page"
+    },
+    "isFallback": true
+  }
+}

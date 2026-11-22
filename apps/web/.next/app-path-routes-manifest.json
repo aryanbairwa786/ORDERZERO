@@ -1,0 +1,13 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/nse/indices/route": "/api/nse/indices",
+  "/api/stocks/[symbol]/history/route": "/api/stocks/[symbol]/history",
+  "/api/stocks/route": "/api/stocks",
+  "/chart/[symbol]/page": "/chart/[symbol]",
+  "/dashboard/page": "/dashboard",
+  "/favicon.ico/route": "/favicon.ico",
+  "/options/page": "/options",
+  "/page": "/",
+  "/screener/page": "/screener"
+}

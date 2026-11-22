@@ -1,0 +1,13 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/nse/indices/route": "app/api/nse/indices/route.js",
+  "/api/stocks/[symbol]/history/route": "app/api/stocks/[symbol]/history/route.js",
+  "/api/stocks/route": "app/api/stocks/route.js",
+  "/chart/[symbol]/page": "app/chart/[symbol]/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/options/page": "app/options/page.js",
+  "/page": "app/page.js",
+  "/screener/page": "app/screener/page.js"
+}

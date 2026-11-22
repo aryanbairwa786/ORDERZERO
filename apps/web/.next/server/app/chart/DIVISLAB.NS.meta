@@ -1,0 +1,40 @@
+{
+  "status": 200,
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/chart/layout,_N_T_/chart/[symbol]/layout,_N_T_/chart/[symbol]/page,_N_T_/chart/DIVISLAB.NS"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/chart/$d$symbol/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 49216,
+    "slots": {
+      "children": {
+        "hints": 49248,
+        "slots": {
+          "children": {
+            "hints": 49248,
+            "slots": {
+              "children": {
+                "hints": 49312,
+                "slots": null
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/15531b91043163f13c70a327b536cfcc70129a16c5fdd6440b37bd3c27f0ecd5/$/chart/DIVISLAB.NS",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/chart/[symbol]/page"
+    },
+    "isFallback": false
+  }
+}
