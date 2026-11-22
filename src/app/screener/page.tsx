@@ -12,6 +12,7 @@ type SortKey = 'symbol' | 'ltp' | 'changePercent' | 'volume' | 'sector';
 export default function ScreenerPage() {
   const [stocks, setStocks] = useState<Record<string, StockData>>({});
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('changePercent');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [sectorFilter, setSectorFilter] = useState('All');
@@ -21,21 +22,24 @@ export default function ScreenerPage() {
     try {
       const batchSize = 15;
       const allStocks: Record<string, StockData> = {};
-      
+
       for (let i = 0; i < NIFTY50_STOCKS.length; i += batchSize) {
         const batch = NIFTY50_STOCKS.slice(i, i + batchSize);
         const symbols = batch.map(s => s.symbol).join(',');
-        const res = await fetch(`/api/stocks?symbols=${symbols}`);
+        const params = new URLSearchParams({ symbols });
+        const res = await fetch(`/api/stocks?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
           Object.assign(allStocks, data.stocks || {});
         }
       }
-      
+
       setStocks(allStocks);
+      setFetchError(false);
       setLoading(false);
     } catch (err) {
       console.error('Screener fetch error:', err);
+      setFetchError(true);
       setLoading(false);
     }
   }, []);
@@ -97,7 +101,7 @@ export default function ScreenerPage() {
               <ScanSearch className="w-6 h-6 text-emerald-500" />
               Stock Screener
             </h1>
-            <p className="text-sm text-zinc-500 mt-1">NIFTY 50 stocks with live market data</p>
+            <p className="text-sm text-zinc-500 mt-1">A static NIFTY 50 reference roster with unofficial Yahoo Finance quotes when available</p>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm">
@@ -113,6 +117,16 @@ export default function ScreenerPage() {
             </div>
           </div>
         </div>
+
+        <div role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100">
+          <strong className="mr-2 font-mono">DATA LIMITS</strong>
+          Yahoo Finance is an unofficial source. Quotes can be delayed, incomplete, rate-limited, or unavailable; rows without a quote are omitted. This roster and quote feed are not an official NSE feed.
+        </div>
+        {fetchError && (
+          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            Quote requests failed. Refresh later; unavailable values are not filled with simulated prices.
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
