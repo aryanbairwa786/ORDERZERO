@@ -1,0 +1,61 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: orderzero_timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smc_user
+      POSTGRES_PASSWORD: change_me_strong_password
+      POSTGRES_DB: smc_india
+      TZ: Asia/Kolkata
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./infra/postgres/init_timescaledb.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: orderzero_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  smc-engine:
+    build:
+      context: ./services/smc-engine
+      dockerfile: Dockerfile
+    container_name: orderzero_smc_engine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Kolkata
+    ports:
+      - "8000:8000"
+    depends_on:
+      - timescaledb
+      - redis
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: orderzero_web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_SMC_ENGINE_URL: http://localhost:8000
+      TZ: Asia/Kolkata
+    ports:
+      - "3000:3000"
+    depends_on:
+      - smc-engine
+
+volumes:
+  timescaledb_data:
+  redis_data:

@@ -1,0 +1,16 @@
+{
+  "name": "OrderZero — Indian Stock Market SMC Terminal",
+  "short_name": "OrderZero",
+  "description": "Order Blocks, Market Structure (BOS/CHoCH), FVG, and Liquidity charting for NSE & BSE.",
+  "start_url": "/chart/NIFTY%2050",
+  "display": "standalone",
+  "background_color": "#09090B",
+  "theme_color": "#10B981",
+  "icons": [
+    {
+      "src": "/brand/orderzero-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
