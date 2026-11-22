@@ -7,7 +7,7 @@ import type {
 } from "./types";
 
 const ENGINE_URL =
-  process.env.NEXT_PUBLIC_SMC_ENGINE_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_SMC_ENGINE_URL || "https://orderzero-lzpv.onrender.com";
 
 export const INDIAN_INSTRUMENTS: {
   symbol: string;

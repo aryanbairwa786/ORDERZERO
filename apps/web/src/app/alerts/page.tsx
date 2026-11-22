@@ -10,7 +10,7 @@ import { SebiDisclaimerBar } from "@/components/compliance/SebiDisclaimerBar";
 import { INDIAN_INSTRUMENTS } from "@/lib/api-client";
 
 const ENGINE_URL =
-  process.env.NEXT_PUBLIC_SMC_ENGINE_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_SMC_ENGINE_URL || "https://orderzero-lzpv.onrender.com";
 
 interface AlertRule {
   id: string;

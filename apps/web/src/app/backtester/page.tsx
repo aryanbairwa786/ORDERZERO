@@ -7,7 +7,7 @@ import { SebiDisclaimerBar } from "@/components/compliance/SebiDisclaimerBar";
 import { formatINR } from "@/lib/format-inr";
 
 const ENGINE_URL =
-  process.env.NEXT_PUBLIC_SMC_ENGINE_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_SMC_ENGINE_URL || "https://orderzero-lzpv.onrender.com";
 
 interface BacktestResult {
   symbol: string;
